@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="/boom/styles/dialog.css" />
 
     <title>Bomberman (NES)</title>
-    <script type="module" crossorigin src="/boom/assets/index-k4eKWB9u.js"></script>
+    <script type="module" crossorigin src="/boom/assets/index-BpgL58Ey.js"></script>
     <link rel="modulepreload" crossorigin href="/boom/assets/phaser-DJc9ez-r.js">
   </head>
   <body>
@@ -302,33 +302,29 @@
           maxDistance = rect.width / 2 - 5;
         }
 
-        // Calculate direction based on dx and dy - balanced sensitivity for all directions
+        // Calculate direction based on dx and dy - prioritize dominant direction
         function getDirectionFromDeltas(dx, dy) {
           const absDx = Math.abs(dx);
           const absDy = Math.abs(dy);
           
-          // Very low threshold for maximum sensitivity - same for all directions
-          const threshold = 1;
+          // Low threshold for maximum sensitivity
+          const threshold = 0.5;
           
-          // Check if movement is significant enough
-          const hasHorizontal = absDx > threshold;
-          const hasVertical = absDy > threshold;
+          // Determine which direction is dominant
+          // Use a smaller multiplier (1.3x) for more forgiving movement
+          // If one direction is noticeably stronger, prioritize it
+          const horizontalDominant = absDx > absDy * 1.3;
+          const verticalDominant = absDy > absDx * 1.3;
           
-          // Determine dominant direction - but allow both if needed
-          // If one direction is significantly stronger (2x), prioritize it
-          // Otherwise, allow both directions for diagonal movement
-          const horizontalStronger = absDx > absDy * 2;
-          const verticalStronger = absDy > absDx * 2;
+          // If one direction is clearly dominant, only activate that direction
+          // Otherwise, allow the direction with larger value if it exceeds threshold
+          const allowHorizontal = horizontalDominant || (absDx > absDy && absDx > threshold);
+          const allowVertical = verticalDominant || (absDy > absDx && absDy > threshold);
           
-          // Horizontal directions - activate if horizontal is significant
-          // Allow if horizontal is stronger OR if vertical is not much stronger
-          const left = hasHorizontal && (horizontalStronger || !verticalStronger) && dx < 0;
-          const right = hasHorizontal && (horizontalStronger || !verticalStronger) && dx > 0;
-          
-          // Vertical directions - activate if vertical is significant
-          // Allow if vertical is stronger OR if horizontal is not much stronger
-          const up = hasVertical && (verticalStronger || !horizontalStronger) && dy < 0;
-          const down = hasVertical && (verticalStronger || !horizontalStronger) && dy > 0;
+          const left = allowHorizontal && absDx > threshold && dx < 0;
+          const right = allowHorizontal && absDx > threshold && dx > 0;
+          const up = allowVertical && absDy > threshold && dy < 0;
+          const down = allowVertical && absDy > threshold && dy > 0;
 
           return { up, down, left, right };
         }
@@ -367,6 +363,21 @@
           if (window.touchControlDown) {
             window.touchControlDown(newDirection.down);
           }
+          
+          // Debug: log when direction changes (only if it changed)
+          if (newDirection.down !== currentDirection.down && newDirection.down) {
+            console.log('DOWN detected:', { dx, dy, absDx: Math.abs(dx), absDy: Math.abs(dy) });
+          }
+          if (newDirection.right !== currentDirection.right && newDirection.right) {
+            console.log('RIGHT detected:', { dx, dy, absDx: Math.abs(dx), absDy: Math.abs(dy) });
+          }
+          if (newDirection.left !== currentDirection.left && newDirection.left) {
+            console.log('LEFT detected:', { dx, dy, absDx: Math.abs(dx), absDy: Math.abs(dy) });
+          }
+          if (newDirection.up !== currentDirection.up && newDirection.up) {
+            console.log('UP detected:', { dx, dy, absDx: Math.abs(dx), absDy: Math.abs(dy) });
+          }
+          
           currentDirection = newDirection;
         }
 

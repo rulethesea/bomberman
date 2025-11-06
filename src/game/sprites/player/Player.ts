@@ -49,7 +49,7 @@ export class Player extends Physics.Arcade.Sprite {
 
     this._direction = PLAYER_DIRECTION_ENUM.LEFT;
 
-    this._speed = 150;
+    this._speed = 125;
     this._hasWallPassPowerUp = false;
     this._hasBombPassPowerUp = false;
     this._hasFlamePassPowerUp = false;
@@ -67,23 +67,23 @@ export class Player extends Physics.Arcade.Sprite {
 
     // Scale player to match tile size (tile spacing is 40px, sprite is 16x16)
     // Target size ~40px to match tile grid, so scale = 40/16 = 2.5
-    this.setScale(2.5);
+    this.setScale(2);
 
-    // Set physics body size - smaller to prevent any overlap with obstacles
-    // Body size: 24x24px (from 40x40px visual) - smaller size to prevent touching tiles
-    // This prevents body from overlapping tiles while still allowing movement through 80px gaps (~56px clearance)
-    // The visual sprite extends beyond the physics body for better visuals
-    const bodyWidth = this.width - 16;
-    const bodyHeight = this.height - 16; // Equal reduction for square body shape
+    // Set physics body size - balanced to prevent overlap but allow movement through gaps
+    // Visual sprite is 40x40px (16*2.5), tile spacing is 40px
+    // Body size 18px provides good clearance: 12px margin on each side (40-18)/2 = 11px
+    // This prevents overlap with tiles while allowing smooth movement through gaps
+    const bodySize = 15; // Balanced size - not too small to get stuck, not too large to overlap
     
     // Set body size - this automatically centers the body
-    this.setBodySize(bodyWidth, bodyHeight);
+    this.setBodySize(bodySize, bodySize);
     
     // Ensure body is properly centered and collision is working correctly
     if (this.body && this.body instanceof Phaser.Physics.Arcade.Body) {
-      // Calculate base offset to center the body perfectly
-      const offsetX = (this.width - bodyWidth) / 2;
-      const offsetY = (this.height - bodyHeight) / 2;
+      // Calculate offset to center the body within the visual sprite
+      // Visual sprite is 40x40, body is 18x18, so offset = (40-18)/2 = 11
+      const offsetX = (this.width - bodySize) / 2;
+      const offsetY = (this.height - bodySize) / 2;
       // Center body perfectly - ensures collision works correctly
       this.body.setOffset(offsetX, offsetY);
       
@@ -93,6 +93,12 @@ export class Player extends Physics.Arcade.Sprite {
       this.body.enable = true;
       // Set body to pushable (can be pushed by other objects)
       this.body.pushable = true;
+      
+      // Don't collide with world bounds - let collision with map handle boundaries
+      this.body.setCollideWorldBounds(false);
+      
+      // Set friction to 0 to allow smooth movement
+      //this.body.setFriction(0, 0);
     }
 
     // Add debug border to visualize player dimensions
@@ -244,26 +250,44 @@ export class Player extends Physics.Arcade.Sprite {
 
   addControlsListener() {
     if (this.body?.enable) {
-      this.setVelocity(0);
-
       let isMoving = false;
+      let velocityX = 0;
+      let velocityY = 0;
 
+      // Check all input directions independently
+      // Priority: if both horizontal and vertical are pressed, allow the most recent one
+      // But in Bomberman style, we typically only allow one direction at a time
+      
       if (this._controlsManager?.cursorKeys?.right.isDown) {
-        this.setVelocityX(this._speed);
+        velocityX = this._speed;
+        velocityY = 0;
         this._playAnimationByKey(PLAYER_DIRECTION_ENUM.RIGH, 'walking-x');
         isMoving = true;
       } else if (this._controlsManager?.cursorKeys?.left.isDown) {
-        this.setVelocityX(-this._speed);
+        velocityX = -this._speed;
+        velocityY = 0;
         this._playAnimationByKey(PLAYER_DIRECTION_ENUM.LEFT, 'walking-x');
         isMoving = true;
       } else if (this._controlsManager?.cursorKeys?.up.isDown) {
-        this.setVelocityY(-this._speed);
+        velocityX = 0;
+        velocityY = -this._speed;
         this._playAnimationByKey(PLAYER_DIRECTION_ENUM.UP, 'walking-y');
         isMoving = true;
       } else if (this._controlsManager?.cursorKeys?.down.isDown) {
-        this.setVelocityY(this._speed);
+        velocityX = 0;
+        velocityY = this._speed;
         this._playAnimationByKey(PLAYER_DIRECTION_ENUM.DOWN, 'walking-y');
         isMoving = true;
+      }
+
+      // Apply velocities - ensure they are set correctly
+      this.setVelocityX(velocityX);
+      this.setVelocityY(velocityY);
+      
+      // Force update body velocity to ensure movement works
+      if (this.body && this.body instanceof Phaser.Physics.Arcade.Body) {
+        this.body.velocity.x = velocityX;
+        this.body.velocity.y = velocityY;
       }
 
       // Set up put bomb control - can be used while moving
