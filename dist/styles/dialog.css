@@ -1,0 +1,50 @@
+::backdrop {
+  background-color: black;
+  opacity: 0.8;
+}
+
+dialog {
+  background-color: #bdbd16;
+  padding: 25px;
+  border-radius: 10px;
+  max-width: 90vw;
+}
+
+.dialog-body {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 30px;
+  padding: 10px;
+}
+
+.dialog-body > section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dialog-body p {
+  font-size: 14px;
+}
+
+.btn-close {
+  text-align: end;
+}
+
+/* Mobile responsive dialog */
+@media screen and (max-width: 767px) {
+  dialog {
+    padding: 15px;
+    max-width: 95vw;
+  }
+
+  .dialog-body {
+    grid-template-columns: auto;
+    gap: 20px;
+    padding: 5px;
+  }
+
+  .dialog-body p {
+    font-size: 12px;
+  }
+}
