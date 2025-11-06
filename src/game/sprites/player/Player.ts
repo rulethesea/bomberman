@@ -41,15 +41,13 @@ export class Player extends Physics.Arcade.Sprite {
   private _savedGame: IGameSaved | null;
 
   private _bombGroup: BombGroup;
-  
-  private _debugGraphics?: Phaser.GameObjects.Graphics;
 
   constructor({ scene, x, y, bombGroup, gameStage, savedGame }: IPlayerProps) {
     super(scene, x, y, 'bomberman-move');
 
     this._direction = PLAYER_DIRECTION_ENUM.LEFT;
 
-    this._speed = 125;
+    this._speed = 150;
     this._hasWallPassPowerUp = false;
     this._hasBombPassPowerUp = false;
     this._hasFlamePassPowerUp = false;
@@ -69,23 +67,20 @@ export class Player extends Physics.Arcade.Sprite {
     // Target size ~40px to match tile grid, so scale = 40/16 = 2.5
     this.setScale(2);
 
-    // Set physics body size - balanced to prevent overlap but allow movement through gaps
-    // Visual sprite is 40x40px (16*2.5), tile spacing is 40px
-    // Body size 18px provides good clearance: 12px margin on each side (40-18)/2 = 11px
-    // This prevents overlap with tiles while allowing smooth movement through gaps
-    const bodySize = 15; // Balanced size - not too small to get stuck, not too large to overlap
+    // Set physics body as circle - balanced to prevent overlap but allow movement through gaps
+    // Visual sprite is 32x32px (16*2), tile spacing is 40px
+    // Circle radius 7.5px provides good clearance and smoother collision detection
+    // Circular body is better for diagonal movement and prevents getting stuck in corners
+    const bodyRadius = 8.0; // Balanced size - not too small to get stuck, not too large to overlap
     
-    // Set body size - this automatically centers the body
-    this.setBodySize(bodySize, bodySize);
+    // Set body as circle - this automatically centers the body
+    this.setCircle(bodyRadius);
     
     // Ensure body is properly centered and collision is working correctly
     if (this.body && this.body instanceof Phaser.Physics.Arcade.Body) {
-      // Calculate offset to center the body within the visual sprite
-      // Visual sprite is 40x40, body is 18x18, so offset = (40-18)/2 = 11
-      const offsetX = (this.width - bodySize) / 2;
-      const offsetY = (this.height - bodySize) / 2;
-      // Center body perfectly - ensures collision works correctly
-      this.body.setOffset(offsetX, offsetY);
+      // Circle body is automatically centered, no offset needed
+      // But we can still set offset if needed for fine-tuning
+      // No offset needed for circular body centered in sprite
       
       // Ensure body is not immovable and collision is enabled
       this.body.setImmovable(false);
@@ -102,8 +97,7 @@ export class Player extends Physics.Arcade.Sprite {
       //this.body.setFriction(0, 0);
     }
 
-    // Add debug border to visualize player dimensions
-    this._createDebugBorder();
+    // Debug border removed
 
     this._validateSavedPlayer(gameStage);
     this._setUpControls();
@@ -115,45 +109,7 @@ export class Player extends Physics.Arcade.Sprite {
     this.scene.cameras.main.setDeadzone(0, 0);
   }
 
-  /**
-   * Create debug border to visualize player dimensions
-   */
-  private _createDebugBorder() {
-    this._debugGraphics = this.scene.add.graphics();
-    this._updateDebugBorder();
-  }
-
-  /**
-   * Update debug border position and size
-   */
-  private _updateDebugBorder() {
-    if (!this._debugGraphics || !this.body) return;
-
-    this._debugGraphics.clear();
-    
-    // Draw border for visual size (displayWidth/displayHeight)
-    this._debugGraphics.lineStyle(2, 0x00ff00, 1); // Green border for visual size
-    this._debugGraphics.strokeRect(
-      this.x - this.displayWidth / 2,
-      this.y - this.displayHeight / 2,
-      this.displayWidth,
-      this.displayHeight
-    );
-
-    // Draw border for physics body size using actual body position
-    // body.x and body.y are the center of the body in Phaser
-    this._debugGraphics.lineStyle(2, 0xff0000, 1); // Red border for physics body
-    if (this.body) {
-      this._debugGraphics.strokeRect(
-        this.body.x - this.body.width / 2,
-        this.body.y - this.body.height / 2,
-        this.body.width,
-        this.body.height
-      );
-    }
-
-    this._debugGraphics.setDepth(this.depth + 1);
-  }
+  // Debug border helpers removed
 
   /**
    * This method set the position of the player if the stage is a saved game
@@ -315,11 +271,7 @@ export class Player extends Physics.Arcade.Sprite {
   /**
    * Update method called every frame
    */
-  preUpdate(time: number, delta: number) {
-    super.preUpdate(time, delta);
-    // Update debug border position every frame
-    this._updateDebugBorder();
-  }
+  // preUpdate removed (debug border only)
 
   kill() {
     // Stop motion!
@@ -331,11 +283,7 @@ export class Player extends Physics.Arcade.Sprite {
     // Fix player to screen and also disable control keys
     this.setImmovable(true);
 
-    // Clean up debug graphics
-    if (this._debugGraphics) {
-      this._debugGraphics.destroy();
-      this._debugGraphics = undefined;
-    }
+    // Debug graphics removed
 
     this.scene.game.sound.stopAll();
     this.scene.sound.play('lose');

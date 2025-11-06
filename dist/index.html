@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="/boom/styles/dialog.css" />
 
     <title>Bomberman (NES)</title>
-    <script type="module" crossorigin src="/boom/assets/index-BpgL58Ey.js"></script>
+    <script type="module" crossorigin src="/boom/assets/index-zjN87UHA.js"></script>
     <link rel="modulepreload" crossorigin href="/boom/assets/phaser-DJc9ez-r.js">
   </head>
   <body>
@@ -364,20 +364,6 @@
             window.touchControlDown(newDirection.down);
           }
           
-          // Debug: log when direction changes (only if it changed)
-          if (newDirection.down !== currentDirection.down && newDirection.down) {
-            console.log('DOWN detected:', { dx, dy, absDx: Math.abs(dx), absDy: Math.abs(dy) });
-          }
-          if (newDirection.right !== currentDirection.right && newDirection.right) {
-            console.log('RIGHT detected:', { dx, dy, absDx: Math.abs(dx), absDy: Math.abs(dy) });
-          }
-          if (newDirection.left !== currentDirection.left && newDirection.left) {
-            console.log('LEFT detected:', { dx, dy, absDx: Math.abs(dx), absDy: Math.abs(dy) });
-          }
-          if (newDirection.up !== currentDirection.up && newDirection.up) {
-            console.log('UP detected:', { dx, dy, absDx: Math.abs(dx), absDy: Math.abs(dy) });
-          }
-          
           currentDirection = newDirection;
         }
 
@@ -413,7 +399,6 @@
           e.preventDefault();
           updateJoystickBounds();
           isActive = true;
-          isTouchingJoystick = true;
           joystickStick.classList.add('active');
           
           const coords = getCoordinates(e);
@@ -428,54 +413,15 @@
           updateJoystick(coords.x, coords.y);
         }
 
-        // Track if we're currently touching joystick
-        let isTouchingJoystick = false;
-        
         // End handlers
-        function onEnd(e) {
+        function onEnd() {
           if (!isActive) return;
-          
-          // Get coordinates where touch ended
-          const coords = getCoordinates(e);
-          const rect = joystickContainer.getBoundingClientRect();
-          
-          // Check if touch ended outside joystick container
-          const isOutsideJoystick = 
-            coords.x < rect.left || 
-            coords.x > rect.right || 
-            coords.y < rect.top || 
-            coords.y > rect.bottom;
-          
-          // Get target to check if it's bomb button
-          const target = e.target || (e.changedTouches && e.changedTouches[0] && e.changedTouches[0].target);
-          const isBombButton = target && (
-            target.closest && target.closest('button') ||
-            target.tagName === 'BUTTON' ||
-            (target.closest && target.closest('.mobile-controls-right'))
-          );
-          
-          // Reset joystick if:
-          // 1. Touch ended outside joystick area AND it's not bomb button
-          // 2. OR touch ended on joystick area (means user released finger from joystick)
-          if (isOutsideJoystick && !isBombButton) {
-            // Touch ended outside joystick and not on bomb - reset
-            e.preventDefault();
-            resetJoystick();
-            isTouchingJoystick = false;
-          } else if (!isOutsideJoystick) {
-            // Touch ended inside joystick area - user released finger from joystick
-            e.preventDefault();
-            resetJoystick();
-            isTouchingJoystick = false;
-          }
-          // If touch ended on bomb button, keep joystick active (don't reset)
+          resetJoystick();
         }
 
         // Attach event listeners
         joystickContainer.addEventListener('mousedown', onStart);
-        joystickContainer.addEventListener('touchstart', onStart, {
-          passive: false
-        });
+        joystickContainer.addEventListener('touchstart', onStart, { passive: false });
 
         document.addEventListener('mousemove', onMove);
         document.addEventListener('touchmove', onMove, { passive: false });

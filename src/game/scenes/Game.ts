@@ -107,8 +107,9 @@ export class Game extends Scene {
     });
 
     // Set up colliders and overlap events
+    // Note: Player body is circular (setCircle), so all colliders use circular collision detection
 
-    // Add boundaries between the layermap and player
+    // Add boundaries between the layermap and player (circular collision)
     this.physics.add.collider(this._player, this._mapManager.mapLayer);
 
     // Add boundaries between the any bomb and player

@@ -33,7 +33,7 @@ export class GameRulesManager {
   private _labels: GameObjects.Group;
 
   private _timers: Map<number, Time.TimerEvent>;
-
+ 
   constructor({
     scene,
     gameStage,
@@ -135,7 +135,7 @@ export class GameRulesManager {
     const versionText = this._scene.add.text(
       distanceX + leftLabelWidth + (isMobile ? 8 : 12),
       baseY,
-      'v2.0.2',
+      'v2.0.4',
       {
         font: `${fontSize - 2}px BitBold`,
         
