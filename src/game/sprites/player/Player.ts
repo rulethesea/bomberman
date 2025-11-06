@@ -97,6 +97,7 @@ export class Player extends Physics.Arcade.Sprite {
       // Don't collide with world bounds - let collision with map handle boundaries
       this.body.setCollideWorldBounds(false);
       
+      
       // Set friction to 0 to allow smooth movement
       //this.body.setFriction(0, 0);
     }
