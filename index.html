@@ -6,6 +6,12 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <!-- Mobile fullscreen/PWA hints -->
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="screen-orientation" content="landscape" />
     <meta
       name="google-site-verification"
@@ -27,6 +33,25 @@
     <title>Bomberman (NES)</title>
   </head>
   <body>
+    <script>
+      // Attempt to enter fullscreen on first user interaction (mobile browsers require gesture)
+      (function () {
+        let requested = false;
+        function requestFs() {
+          if (requested) return;
+          requested = true;
+          const el = document.documentElement;
+          const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+          if (req) {
+            try { req.call(el); } catch (e) { /* ignore */ }
+          }
+          // Best-effort hide URL bar on older mobile browsers
+          setTimeout(() => window.scrollTo(0, 1), 50);
+        }
+        window.addEventListener('pointerdown', requestFs, { once: true, passive: true });
+        window.addEventListener('touchstart', requestFs, { once: true, passive: true });
+      })();
+    </script>
     <script>
       // Auto-rotate to landscape on mobile
       (function () {
@@ -285,7 +310,14 @@
         let centerX = 0;
         let centerY = 0;
         let maxDistance = 0;
+        let currentPointerId = null;
         let currentDirection = {
+          up: false,
+          down: false,
+          left: false,
+          right: false
+        };
+        let lastDirection = {
           up: false,
           down: false,
           left: false,
@@ -297,38 +329,109 @@
           const rect = joystickContainer.getBoundingClientRect();
           centerX = rect.left + rect.width / 2;
           centerY = rect.top + rect.height / 2;
-          // Increased max distance for better range - allow joystick to move much further
           maxDistance = rect.width / 2 - 5;
         }
 
-        // Calculate direction based on dx and dy - prioritize dominant direction
+        // Calculate direction based on dx and dy - smart turning detection
         function getDirectionFromDeltas(dx, dy) {
           const absDx = Math.abs(dx);
           const absDy = Math.abs(dy);
           
-          // Low threshold for maximum sensitivity
-          const threshold = 0.5;
+          // Threshold for activation
+          const threshold = 5; // pixels
           
-          // Determine which direction is dominant
-          // Use a smaller multiplier (1.3x) for more forgiving movement
-          // If one direction is noticeably stronger, prioritize it
-          const horizontalDominant = absDx > absDy * 1.3;
-          const verticalDominant = absDy > absDx * 1.3;
+          // Calculate total distance
+          const distance = Math.sqrt(dx * dx + dy * dy);
           
-          // If one direction is clearly dominant, only activate that direction
-          // Otherwise, allow the direction with larger value if it exceeds threshold
-          const allowHorizontal = horizontalDominant || (absDx > absDy && absDx > threshold);
-          const allowVertical = verticalDominant || (absDy > absDx && absDy > threshold);
+          // If movement is too small, return no direction
+          if (distance < threshold) {
+            return { up: false, down: false, left: false, right: false };
+          }
           
-          const left = allowHorizontal && absDx > threshold && dx < 0;
-          const right = allowHorizontal && absDx > threshold && dx > 0;
-          const up = allowVertical && absDy > threshold && dy < 0;
-          const down = allowVertical && absDy > threshold && dy > 0;
+          // Check if we're turning (changing from one axis to another)
+          const wasHorizontal = lastDirection.left || lastDirection.right;
+          const wasVertical = lastDirection.up || lastDirection.down;
+          
+          // Determine which axis is dominant
+          const horizontalRatio = absDx / (absDx + absDy);
+          const verticalRatio = absDy / (absDx + absDy);
+          
+          // Very aggressive threshold (90%) for clean single-direction input
+          // When turning, use even higher threshold (95%) to ensure clean direction change
+          const isTurning = (wasHorizontal && absDy > absDx) || (wasVertical && absDx > absDy);
+          const turnThreshold = isTurning ? 0.95 : 0.90;
+          
+          const horizontalDominant = horizontalRatio > turnThreshold;
+          const verticalDominant = verticalRatio > turnThreshold;
+          
+          let left = false, right = false, up = false, down = false;
+          
+          if (horizontalDominant) {
+            // Horizontal movement is clearly dominant - only use horizontal
+            if (absDx > threshold) {
+              left = dx < 0;
+              right = dx > 0;
+            }
+          } else if (verticalDominant) {
+            // Vertical movement is clearly dominant - only use vertical
+            if (absDy > threshold) {
+              up = dy < 0;
+              down = dy > 0;
+            }
+          } else {
+            // Similar strength - when turning, prioritize the new direction ONLY
+            if (isTurning) {
+              // We're turning - ONLY send the new direction, ignore the old one
+              if (wasHorizontal && absDy > threshold) {
+                // Was moving horizontal, now turning vertical - ONLY send vertical
+                up = dy < 0;
+                down = dy > 0;
+                // Explicitly disable horizontal to prevent conflict
+                left = false;
+                right = false;
+              } else if (wasVertical && absDx > threshold) {
+                // Was moving vertical, now turning horizontal - ONLY send horizontal
+                left = dx < 0;
+                right = dx > 0;
+                // Explicitly disable vertical to prevent conflict
+                up = false;
+                down = false;
+              }
+            } else {
+              // Not turning - prioritize the stronger one
+              if (absDx > absDy * 1.15) {
+                // Horizontal is noticeably stronger (15% more)
+                if (absDx > threshold) {
+                  left = dx < 0;
+                  right = dx > 0;
+                }
+              } else if (absDy > absDx * 1.15) {
+                // Vertical is noticeably stronger (15% more)
+                if (absDy > threshold) {
+                  up = dy < 0;
+                  down = dy > 0;
+                }
+              } else {
+                // Very similar - use the one that's slightly stronger
+                if (absDx > absDy) {
+                  if (absDx > threshold) {
+                    left = dx < 0;
+                    right = dx > 0;
+                  }
+                } else {
+                  if (absDy > threshold) {
+                    up = dy < 0;
+                    down = dy > 0;
+                  }
+                }
+              }
+            }
+          }
 
           return { up, down, left, right };
         }
 
-        // Update controls and visual position
+        // Update controls and visual position - instant and responsive
         function updateJoystick(x, y) {
           const dx = x - centerX;
           const dy = y - centerY;
@@ -342,42 +445,54 @@
           const stickX = Math.cos(angle) * limitedDistance;
           const stickY = Math.sin(angle) * limitedDistance;
 
-          // Update visual position immediately
+          // Update visual position instantly - no transition during movement
           joystickStick.style.transform = `translate(calc(-50% + ${stickX}px), calc(-50% + ${stickY}px))`;
+          joystickStick.style.transition = 'none';
 
-          // Calculate direction based on deltas - more responsive
+          // Calculate direction based on deltas - instant response with smart turning
           const newDirection = getDirectionFromDeltas(dx, dy);
-
-          // Always update all controls immediately when joystick is active
-          // All directions updated equally for balanced responsiveness
-          if (window.touchControlLeft) {
+          
+          // Update controls immediately for instant response
+          // Always call these functions to ensure state is updated
+          if (typeof window.touchControlLeft === 'function') {
             window.touchControlLeft(newDirection.left);
           }
-          if (window.touchControlRight) {
+          if (typeof window.touchControlRight === 'function') {
             window.touchControlRight(newDirection.right);
           }
-          if (window.touchControlUp) {
+          if (typeof window.touchControlUp === 'function') {
             window.touchControlUp(newDirection.up);
           }
-          if (window.touchControlDown) {
+          if (typeof window.touchControlDown === 'function') {
             window.touchControlDown(newDirection.down);
           }
           
+          // Store current direction and update last direction for turning detection
           currentDirection = newDirection;
+          lastDirection = { ...newDirection };
         }
 
         // Reset joystick to center
         function resetJoystick() {
           joystickStick.style.transform = 'translate(-50%, -50%)';
+          joystickStick.style.transition = 'transform 0.15s ease-out'; // Smooth return to center
           joystickStick.classList.remove('active');
           isActive = false;
+          currentPointerId = null;
 
-          // Reset all controls
-          if (window.touchControlUp) window.touchControlUp(false);
-          if (window.touchControlDown) window.touchControlDown(false);
-          if (window.touchControlLeft) window.touchControlLeft(false);
-          if (window.touchControlRight) window.touchControlRight(false);
+          // Reset all controls immediately - ensure functions exist before calling
+          if (typeof window.touchControlUp === 'function') window.touchControlUp(false);
+          if (typeof window.touchControlDown === 'function') window.touchControlDown(false);
+          if (typeof window.touchControlLeft === 'function') window.touchControlLeft(false);
+          if (typeof window.touchControlRight === 'function') window.touchControlRight(false);
+          
           currentDirection = {
+            up: false,
+            down: false,
+            left: false,
+            right: false
+          };
+          lastDirection = {
             up: false,
             down: false,
             left: false,
@@ -385,19 +500,25 @@
           };
         }
 
-        // Get touch or mouse coordinates
+        // Get pointer coordinates (works for both mouse and touch)
         function getCoordinates(e) {
-          if (e.touches && e.touches.length > 0) {
+          if (e.pointerId !== undefined) {
+            // Pointer event
+            return { x: e.clientX, y: e.clientY };
+          } else if (e.touches && e.touches.length > 0) {
+            // Touch event
             return { x: e.touches[0].clientX, y: e.touches[0].clientY };
           }
+          // Mouse event
           return { x: e.clientX, y: e.clientY };
         }
 
-        // Start handlers
+        // Start handlers - use Pointer Events for better cross-platform support
         function onStart(e) {
           e.preventDefault();
           updateJoystickBounds();
           isActive = true;
+          currentPointerId = e.pointerId !== undefined ? e.pointerId : null;
           joystickStick.classList.add('active');
           
           const coords = getCoordinates(e);
@@ -407,27 +528,45 @@
         // Move handlers
         function onMove(e) {
           if (!isActive) return;
+          
+          // For pointer events, check if it's the same pointer
+          if (e.pointerId !== undefined && currentPointerId !== null && e.pointerId !== currentPointerId) {
+            return;
+          }
+          
           e.preventDefault();
           const coords = getCoordinates(e);
           updateJoystick(coords.x, coords.y);
         }
 
         // End handlers
-        function onEnd() {
+        function onEnd(e) {
           if (!isActive) return;
+          
+          // For pointer events, check if it's the same pointer
+          if (e.pointerId !== undefined && currentPointerId !== null && e.pointerId !== currentPointerId) {
+            return;
+          }
+          
           resetJoystick();
         }
 
-        // Attach event listeners
-        joystickContainer.addEventListener('mousedown', onStart);
-        joystickContainer.addEventListener('touchstart', onStart, { passive: false });
-
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('touchmove', onMove, { passive: false });
-
-        document.addEventListener('mouseup', onEnd);
-        document.addEventListener('touchend', onEnd);
-        document.addEventListener('touchcancel', onEnd);
+        // Use Pointer Events for better cross-platform support (mouse + touch)
+        if (window.PointerEvent) {
+          joystickContainer.addEventListener('pointerdown', onStart, { passive: false });
+          document.addEventListener('pointermove', onMove, { passive: false });
+          document.addEventListener('pointerup', onEnd);
+          document.addEventListener('pointercancel', onEnd);
+        } else {
+          // Fallback for older browsers
+          joystickContainer.addEventListener('mousedown', onStart);
+          joystickContainer.addEventListener('touchstart', onStart, { passive: false });
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('touchmove', onMove, { passive: false });
+          document.addEventListener('mouseup', onEnd);
+          document.addEventListener('touchend', onEnd);
+          document.addEventListener('touchcancel', onEnd);
+        }
 
         // Update bounds on resize
         window.addEventListener('resize', updateJoystickBounds);

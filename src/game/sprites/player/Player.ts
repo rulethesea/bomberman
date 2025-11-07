@@ -47,7 +47,7 @@ export class Player extends Physics.Arcade.Sprite {
 
     this._direction = PLAYER_DIRECTION_ENUM.LEFT;
 
-    this._speed = 150;
+    this._speed = 125;
     this._hasWallPassPowerUp = false;
     this._hasBombPassPowerUp = false;
     this._hasFlamePassPowerUp = false;
@@ -65,13 +65,13 @@ export class Player extends Physics.Arcade.Sprite {
 
     // Scale player to match tile size (tile spacing is 40px, sprite is 16x16)
     // Target size ~40px to match tile grid, so scale = 40/16 = 2.5
-    this.setScale(2);
+    this.setScale(2.2);
 
-    // Set physics body as circle - balanced to prevent overlap but allow movement through gaps
-    // Visual sprite is 32x32px (16*2), tile spacing is 40px
-    // Circle radius 7.5px provides good clearance and smoother collision detection
+    // Set physics body as circle - smaller radius to easily pass through gaps between obstacles
+    // Visual sprite is ~35px (16*2.2), tile spacing is 40px
+    // Smaller radius (6px) allows easier passage through narrow gaps between walls
     // Circular body is better for diagonal movement and prevents getting stuck in corners
-    const bodyRadius = 8.0; // Balanced size - not too small to get stuck, not too large to overlap
+    const bodyRadius = 6.0; // Smaller size to easily pass through gaps between obstacles
     
     // Set body as circle - this automatically centers the body
     this.setCircle(bodyRadius);
@@ -92,9 +92,15 @@ export class Player extends Physics.Arcade.Sprite {
       // Don't collide with world bounds - let collision with map handle boundaries
       this.body.setCollideWorldBounds(false);
       
+      // Set drag to 0 for instant stop/start - prevents getting stuck
+      this.body.setDrag(0, 0);
+      
+      // Reduce collision padding for easier passage through gaps
+      // Smaller padding means collision detection is tighter to the body
+      this.body.setSize(this.body.width, this.body.height, true);
       
       // Set friction to 0 to allow smooth movement
-      //this.body.setFriction(0, 0);
+      //this.body.setFriction(0.5, 0.5);
     }
 
     // Debug border removed
@@ -211,37 +217,147 @@ export class Player extends Physics.Arcade.Sprite {
       let velocityX = 0;
       let velocityY = 0;
 
-      // Check all input directions independently
-      // Priority: if both horizontal and vertical are pressed, allow the most recent one
-      // But in Bomberman style, we typically only allow one direction at a time
+      // Check all input directions independently for smooth responsive movement
+      // Store the state first to check all directions
+      const right = this._controlsManager?.cursorKeys?.right.isDown ?? false;
+      const left = this._controlsManager?.cursorKeys?.left.isDown ?? false;
+      const up = this._controlsManager?.cursorKeys?.up.isDown ?? false;
+      const down = this._controlsManager?.cursorKeys?.down.isDown ?? false;
       
-      if (this._controlsManager?.cursorKeys?.right.isDown) {
-        velocityX = this._speed;
-        velocityY = 0;
-        this._playAnimationByKey(PLAYER_DIRECTION_ENUM.RIGH, 'walking-x');
-        isMoving = true;
-      } else if (this._controlsManager?.cursorKeys?.left.isDown) {
-        velocityX = -this._speed;
-        velocityY = 0;
-        this._playAnimationByKey(PLAYER_DIRECTION_ENUM.LEFT, 'walking-x');
-        isMoving = true;
-      } else if (this._controlsManager?.cursorKeys?.up.isDown) {
-        velocityX = 0;
-        velocityY = -this._speed;
-        this._playAnimationByKey(PLAYER_DIRECTION_ENUM.UP, 'walking-y');
-        isMoving = true;
-      } else if (this._controlsManager?.cursorKeys?.down.isDown) {
-        velocityX = 0;
-        velocityY = this._speed;
-        this._playAnimationByKey(PLAYER_DIRECTION_ENUM.DOWN, 'walking-y');
-        isMoving = true;
+      // Count how many directions are pressed
+      const horizontalPressed = (left ? 1 : 0) + (right ? 1 : 0);
+      const verticalPressed = (up ? 1 : 0) + (down ? 1 : 0);
+      const totalPressed = horizontalPressed + verticalPressed;
+      
+      // If only one direction is pressed, use it directly
+      // If multiple directions, prioritize based on which axis has more input
+      if (totalPressed === 1) {
+        // Single direction - use it directly
+        if (right) {
+          velocityX = this._speed;
+          velocityY = 0;
+          this._playAnimationByKey(PLAYER_DIRECTION_ENUM.RIGH, 'walking-x');
+          isMoving = true;
+        } else if (left) {
+          velocityX = -this._speed;
+          velocityY = 0;
+          this._playAnimationByKey(PLAYER_DIRECTION_ENUM.LEFT, 'walking-x');
+          isMoving = true;
+        } else if (up) {
+          velocityX = 0;
+          velocityY = -this._speed;
+          this._playAnimationByKey(PLAYER_DIRECTION_ENUM.UP, 'walking-y');
+          isMoving = true;
+        } else if (down) {
+          velocityX = 0;
+          velocityY = this._speed;
+          this._playAnimationByKey(PLAYER_DIRECTION_ENUM.DOWN, 'walking-y');
+          isMoving = true;
+        }
+      } else if (totalPressed > 1) {
+        // Multiple directions - allow quick direction changes for turning into gaps
+        // Priority: allow the perpendicular direction to take over immediately for responsive turning
+        
+        // Check current movement direction to allow perpendicular turning
+        const currentVelX = this.body?.velocity.x ?? 0;
+        const currentVelY = this.body?.velocity.y ?? 0;
+        const wasMovingHorizontal = Math.abs(currentVelX) > Math.abs(currentVelY);
+        const wasMovingVertical = Math.abs(currentVelY) > Math.abs(currentVelX);
+        const isCurrentlyMoving = Math.abs(currentVelX) > 0.1 || Math.abs(currentVelY) > 0.1;
+        
+        // If currently moving, prioritize the perpendicular direction for easy turning
+        if (isCurrentlyMoving) {
+          if (wasMovingHorizontal && verticalPressed > 0) {
+            // Currently moving horizontally, allow vertical turn (into gap)
+            if (up) {
+              velocityX = 0;
+              velocityY = -this._speed;
+              this._playAnimationByKey(PLAYER_DIRECTION_ENUM.UP, 'walking-y');
+              isMoving = true;
+            } else if (down) {
+              velocityX = 0;
+              velocityY = this._speed;
+              this._playAnimationByKey(PLAYER_DIRECTION_ENUM.DOWN, 'walking-y');
+              isMoving = true;
+            }
+          } else if (wasMovingVertical && horizontalPressed > 0) {
+            // Currently moving vertically, allow horizontal turn (into gap)
+            if (right) {
+              velocityX = this._speed;
+              velocityY = 0;
+              this._playAnimationByKey(PLAYER_DIRECTION_ENUM.RIGH, 'walking-x');
+              isMoving = true;
+            } else if (left) {
+              velocityX = -this._speed;
+              velocityY = 0;
+              this._playAnimationByKey(PLAYER_DIRECTION_ENUM.LEFT, 'walking-x');
+              isMoving = true;
+            }
+          } else {
+            // Not clearly moving in one direction, or both directions pressed
+            // Prioritize based on which axis has more input
+            if (verticalPressed >= horizontalPressed) {
+              if (up) {
+                velocityX = 0;
+                velocityY = -this._speed;
+                this._playAnimationByKey(PLAYER_DIRECTION_ENUM.UP, 'walking-y');
+                isMoving = true;
+              } else if (down) {
+                velocityX = 0;
+                velocityY = this._speed;
+                this._playAnimationByKey(PLAYER_DIRECTION_ENUM.DOWN, 'walking-y');
+                isMoving = true;
+              }
+            } else {
+              if (right) {
+                velocityX = this._speed;
+                velocityY = 0;
+                this._playAnimationByKey(PLAYER_DIRECTION_ENUM.RIGH, 'walking-x');
+                isMoving = true;
+              } else if (left) {
+                velocityX = -this._speed;
+                velocityY = 0;
+                this._playAnimationByKey(PLAYER_DIRECTION_ENUM.LEFT, 'walking-x');
+                isMoving = true;
+              }
+            }
+          }
+        } else {
+          // Not currently moving - prioritize based on input count
+          if (verticalPressed >= horizontalPressed) {
+            if (up) {
+              velocityX = 0;
+              velocityY = -this._speed;
+              this._playAnimationByKey(PLAYER_DIRECTION_ENUM.UP, 'walking-y');
+              isMoving = true;
+            } else if (down) {
+              velocityX = 0;
+              velocityY = this._speed;
+              this._playAnimationByKey(PLAYER_DIRECTION_ENUM.DOWN, 'walking-y');
+              isMoving = true;
+            }
+          } else {
+            if (right) {
+              velocityX = this._speed;
+              velocityY = 0;
+              this._playAnimationByKey(PLAYER_DIRECTION_ENUM.RIGH, 'walking-x');
+              isMoving = true;
+            } else if (left) {
+              velocityX = -this._speed;
+              velocityY = 0;
+              this._playAnimationByKey(PLAYER_DIRECTION_ENUM.LEFT, 'walking-x');
+              isMoving = true;
+            }
+          }
+        }
       }
 
-      // Apply velocities - ensure they are set correctly
+      // IMPORTANT: Always set velocity, even if 0, to prevent getting stuck
+      // This ensures player stops immediately when no input
       this.setVelocityX(velocityX);
       this.setVelocityY(velocityY);
       
-      // Force update body velocity to ensure movement works
+      // Force update body velocity immediately for instant response
       if (this.body && this.body instanceof Phaser.Physics.Arcade.Body) {
         this.body.velocity.x = velocityX;
         this.body.velocity.y = velocityY;

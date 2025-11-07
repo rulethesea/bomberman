@@ -135,7 +135,7 @@ export class GameRulesManager {
     const versionText = this._scene.add.text(
       distanceX + leftLabelWidth + (isMobile ? 8 : 12),
       baseY,
-      'v2.0.4',
+      'v2.0.6',
       {
         font: `${fontSize - 2}px BitBold`,
         
